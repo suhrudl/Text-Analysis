@@ -1,0 +1,142 @@
+---
+title: "Word Frequency in Whatsapp Group Chat"
+author: "Suhrud Lowalekar"
+date: "February 2, 2016"
+output: html_document
+---
+
+I saw a word cloud visualization somewhere on the web, and thought it'd be really cool to make one of those by analyzing text message history of a group chat that we've had running since over a year. The world cloud has most frequently occuring words/terms. 
+
+Setting the Environment
+
+The required packages in RStudio are "tm", "SnowballCC", "RColorBrewer", "ggplot2", "wordcloud", "biclust", "cluster", "igraph", "fpc" and "Rcampdf"
+
+
+Loading Texts
+
+Setting a path for the corpus
+```{r}
+#setting the path for the corpus 
+cname <- file.path("~", "Desktop", "fun")   
+cname 
+dir(cname)
+library(tm)   
+docs <- Corpus(DirSource(cname))   
+```
+
+After pasting the chat history in the directory, test to see if it is being read
+```{r}
+#checking text files
+summary(docs)
+inspect(docs[1])
+```
+
+Preprocessing
+```{r}
+#removing punctuation
+docs <- tm_map(docs, removePunctuation) 
+
+#removing special characters
+for(j in seq(docs))   
+{   
+  docs[[j]] <- gsub("/", " ", docs[[j]])   
+  docs[[j]] <- gsub("@", " ", docs[[j]])   
+  docs[[j]] <- gsub("\\|", " ", docs[[j]])   
+}   
+
+#removing numbers
+docs <- tm_map(docs, removeNumbers) 
+
+#converitng to lower case
+docs <- tm_map(docs, tolower)
+
+#removing stopwords (here a english spelled marathi word library would be better, but ah well)
+docs <- tm_map(docs, removeWords, stopwords("english")) 
+
+#combining words (these are the first/last names of my friends, didn't make sense to search for them without each other)
+for (j in seq(docs))
+{
+  
+  docs[[j]] <- gsub("parth ponkshe", "parth_ponkshe", docs[[j]])
+  docs[[j]] <- gsub("akshay mohgaokar", "akshay_mohgaokar", docs[[j]])
+  docs[[j]] <- gsub("pranav sawant", "pranav_sawant", docs[[j]])
+  docs[[j]] <- gsub("milind shintre", "milind_shintre", docs[[j]])
+  docs[[j]] <- gsub("ketan patwardhan", "ketan_patwardhan", docs[[j]])
+
+}
+
+#remove common words (just some uninteresting words that were showing up)
+docs <- tm_map(docs, removeWords, c("emoji", "anyone", "can", "also", "class", "course", "dont", "get", "good", "guys", "hai", "image", "just", "mail", "okay", "one", "right", "take", "thanks", "will", "yeah", "hey", "book", "add", "cool"))   
+
+#removing common endings
+library(SnowballC)   
+docs <- tm_map(docs, stemDocument) 
+
+#removing unecessary whitespace
+docs <- tm_map(docs, stripWhitespace)   
+
+#treat as plaintext
+docs <- tm_map(docs, PlainTextDocument)   
+
+```
+
+
+
+Staging the Data
+```{r}
+#creating the document term matrix
+dtm <- DocumentTermMatrix(docs)   
+dtm
+
+#tanspose of the matrix
+tdm <- TermDocumentMatrix(docs)   
+tdm 
+```
+
+Exploring the data
+```{r}
+#organize by frequency
+freq <- colSums(as.matrix(dtm))   
+length(freq)   
+ord <- order(freq)
+
+#export to excel
+m <- as.matrix(dtm)   
+dim(m)   
+write.csv(m, file="dtm.csv")
+
+#removing the sparse terms
+dtms <- removeSparseTerms(dtm, 0.2)   
+
+#inspecting elements
+freq[head(ord)]  
+freq[tail(ord)]
+
+freq <- colSums(as.matrix(dtms))   
+
+freq <- sort(colSums(as.matrix(dtm)), decreasing=TRUE)   
+
+wf <- data.frame(word=names(freq), freq=freq)   
+head(wf)
+tail(wf)
+```
+
+Plotting the data as a histogram
+```{r, results="hide"}
+library(ggplot2)   
+p <- ggplot(subset(wf, freq>20), aes(word, freq))    
+p <- p + geom_bar(stat="identity")   
+p <- p + theme(axis.text.x=element_text(angle=45, hjust=1))   
+p
+```
+
+
+And as a word cloud
+```{r, echo=FALSE, results="hide"}
+library(wordcloud)
+set.seed(142)   
+wordcloud(names(freq), freq, min.freq=10, max.words=500, scale=c(2, .5), colors=brewer.pal(6, "Dark2"))
+
+```
+
+
